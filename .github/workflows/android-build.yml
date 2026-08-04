@@ -47,6 +47,8 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build APK
+        env:
+          USE_ALIYUN_MIRROR: "false"
         run: |
           if [ "${{ inputs.build_type }}" = "测试版" ]; then
             ./gradlew --no-daemon :app:assembleDebug
