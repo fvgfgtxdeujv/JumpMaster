@@ -9,9 +9,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +32,7 @@ fun SettingsScreen(
     config: DeviceConfig,
     onConfigChange: (DeviceConfig) -> Unit,
     onSaveAdb: () -> Unit,
+    onStartPairing: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -49,7 +51,7 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, "返回", tint = Color(0xFF666666))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = Color(0xFF666666))
             }
             Text(text = "设置", style = AppTypography.h2)
         }
@@ -97,91 +99,24 @@ fun SettingsScreen(
                 SectionLabel("ADB 无线调试")
                 CardSection {
                     Text(
-                        text = "在目标设备上开启: 开发者选项 → 无线调试",
+                        text = "在目标设备上开启: 开发者选项 → 无线调试\n点击下方按钮自动发现设备，在通知栏输入配对码即可连接",
                         style = AppTypography.monoSmall,
                         color = YellowAccent,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    // Host / Port
-                    OutlinedTextField(
-                        value = config.adbHost,
-                        onValueChange = { onConfigChange(config.copy(adbHost = it)) },
-                        label = { Text("IP 地址", color = TextSecondary) },
-                        placeholder = { Text("192.168.1.100", color = TextMuted) },
-                        singleLine = true,
-                        textStyle = AppTypography.mono.copy(color = TextPrimary),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = BluePrimary,
-                            unfocusedBorderColor = DarkBorder,
-                            cursorColor = BluePrimary
+                    // Auto-discover & pair button
+                    Button(
+                        onClick = onStartPairing,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BluePrimary,
+                            contentColor = Color.White
                         ),
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = if (config.adbPort > 0) config.adbPort.toString() else "",
-                        onValueChange = { str ->
-                            val port = str.filter { it.isDigit() }.toIntOrNull() ?: 0
-                            onConfigChange(config.copy(adbPort = port))
-                        },
-                        label = { Text("连接端口", color = TextSecondary) },
-                        placeholder = { Text("无线调试页面显示的端口", color = TextMuted) },
-                        singleLine = true,
-                        textStyle = AppTypography.mono.copy(color = TextPrimary),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = BluePrimary,
-                            unfocusedBorderColor = DarkBorder,
-                            cursorColor = BluePrimary
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "配对信息 (首次连接需要)",
-                        style = AppTypography.caption,
-                        color = TextSecondary,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = if (config.adbPairingPort > 0) config.adbPairingPort.toString() else "",
-                        onValueChange = { str ->
-                            val port = str.filter { it.isDigit() }.toIntOrNull() ?: 0
-                            onConfigChange(config.copy(adbPairingPort = port))
-                        },
-                        label = { Text("配对端口", color = TextSecondary) },
-                        placeholder = { Text("使用配对码配对设备时显示的端口", color = TextMuted) },
-                        singleLine = true,
-                        textStyle = AppTypography.mono.copy(color = TextPrimary),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PurpleAccent,
-                            unfocusedBorderColor = DarkBorder,
-                            cursorColor = PurpleAccent
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = config.adbPairingCode,
-                        onValueChange = { onConfigChange(config.copy(adbPairingCode = it)) },
-                        label = { Text("配对码", color = TextSecondary) },
-                        placeholder = { Text("6位数字配对码", color = TextMuted) },
-                        singleLine = true,
-                        textStyle = AppTypography.mono.copy(color = TextPrimary),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PurpleAccent,
-                            unfocusedBorderColor = DarkBorder,
-                            cursorColor = PurpleAccent
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    ) {
+                        Text("自动发现并配对", style = AppTypography.body)
+                    }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -205,18 +140,120 @@ fun SettingsScreen(
                             AdbConnectionService.ConnectionState.DISCONNECTED -> "○ 未连接"
                         }
                         Text(text = statusText, style = AppTypography.monoSmall, color = statusColor)
+                    }
 
-                        // Save button
-                        Button(
-                            onClick = onSaveAdb,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = BluePrimary,
-                                contentColor = Color.White
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Manual config fallback (collapsible)
+                    var showManual by rememberSaveable { mutableStateOf(false) }
+                    Text(
+                        text = if (showManual) "收起手动配置 ▲" else "手动配置（可选）▼",
+                        style = AppTypography.caption,
+                        color = TextSecondary,
+                        modifier = Modifier
+                            .clickable { showManual = !showManual }
+                            .padding(vertical = 4.dp)
+                    )
+
+                    if (showManual) {
+                        // Host / Port
+                        OutlinedTextField(
+                            value = config.adbHost,
+                            onValueChange = { onConfigChange(config.copy(adbHost = it)) },
+                            label = { Text("IP 地址", color = TextSecondary) },
+                            placeholder = { Text("192.168.1.100", color = TextMuted) },
+                            singleLine = true,
+                            textStyle = AppTypography.mono.copy(color = TextPrimary),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = BluePrimary,
+                                unfocusedBorderColor = DarkBorder,
+                                cursorColor = BluePrimary
                             ),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = if (config.adbPort > 0) config.adbPort.toString() else "",
+                            onValueChange = { str ->
+                                val port = str.filter { it.isDigit() }.toIntOrNull() ?: 0
+                                onConfigChange(config.copy(adbPort = port))
+                            },
+                            label = { Text("连接端口", color = TextSecondary) },
+                            placeholder = { Text("无线调试页面显示的端口", color = TextMuted) },
+                            singleLine = true,
+                            textStyle = AppTypography.mono.copy(color = TextPrimary),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = BluePrimary,
+                                unfocusedBorderColor = DarkBorder,
+                                cursorColor = BluePrimary
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = "配对信息 (首次连接需要)",
+                            style = AppTypography.caption,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = if (config.adbPairingPort > 0) config.adbPairingPort.toString() else "",
+                            onValueChange = { str ->
+                                val port = str.filter { it.isDigit() }.toIntOrNull() ?: 0
+                                onConfigChange(config.copy(adbPairingPort = port))
+                            },
+                            label = { Text("配对端口", color = TextSecondary) },
+                            placeholder = { Text("使用配对码配对设备时显示的端口", color = TextMuted) },
+                            singleLine = true,
+                            textStyle = AppTypography.mono.copy(color = TextPrimary),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = PurpleAccent,
+                                unfocusedBorderColor = DarkBorder,
+                                cursorColor = PurpleAccent
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = config.adbPairingCode,
+                            onValueChange = { onConfigChange(config.copy(adbPairingCode = it)) },
+                            label = { Text("配对码", color = TextSecondary) },
+                            placeholder = { Text("6位数字配对码", color = TextMuted) },
+                            singleLine = true,
+                            textStyle = AppTypography.mono.copy(color = TextPrimary),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = PurpleAccent,
+                                unfocusedBorderColor = DarkBorder,
+                                cursorColor = PurpleAccent
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            Text("保存", style = AppTypography.body)
+                            Button(
+                                onClick = onSaveAdb,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = BluePrimary,
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
+                            ) {
+                                Text("保存", style = AppTypography.body)
+                            }
                         }
                     }
                 }

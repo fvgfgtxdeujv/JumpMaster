@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="notification_accent">#3D7BFF</color>
+    <color name="notification_success">#34C77B</color>
+    <color name="notification_error">#FF5A5A</color>
+</resources>

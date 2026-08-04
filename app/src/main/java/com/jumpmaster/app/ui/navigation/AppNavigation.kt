@@ -28,7 +28,8 @@ fun AppNavigation(
     lastScreenshot: Bitmap?,
     onToggle: () -> Unit,
     onConfigChange: (DeviceConfig) -> Unit,
-    onSaveAdb: () -> Unit
+    onSaveAdb: () -> Unit,
+    onStartPairing: () -> Unit
 ) {
     var currentScreen by remember { mutableStateOf("home") }
 
@@ -55,6 +56,7 @@ fun AppNavigation(
                     config = config,
                     onConfigChange = onConfigChange,
                     onSaveAdb = onSaveAdb,
+                    onStartPairing = onStartPairing,
                     onBack = { currentScreen = "home" }
                 )
                 "debug" -> DebugScreen(

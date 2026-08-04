@@ -22,6 +22,7 @@ import com.jumpmaster.app.core.CaptureMode
 import com.jumpmaster.app.core.DeviceConfig
 import com.jumpmaster.app.core.JumpController
 import com.jumpmaster.app.core.adb.AdbConnectionService
+import com.jumpmaster.app.core.adb.AdbPairingService
 import com.jumpmaster.app.data.ConfigRepository
 import com.jumpmaster.app.service.FloatingWindowService
 import com.jumpmaster.app.service.ScreenCaptureService
@@ -205,6 +206,25 @@ class MainActivity : ComponentActivity() {
                                     pairingPort = c.adbPairingPort.takeIf { it > 0 }
                                 )
                             }
+                        },
+                        onStartPairing = {
+                            Log.i(TAG, "Starting ADB pairing service")
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                try {
+                                    val intent = AdbPairingService.startIntent(this)
+                                    startForegroundService(intent)
+                                    Toast.makeText(this, "正在搜索无线调试设备…", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Failed to start pairing service", e)
+                                    Toast.makeText(this, "启动配对服务失败: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
+                            } else {
+                                Toast.makeText(
+                                    this,
+                                    "无线调试配对需要 Android 11 及以上系统",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         }
                     )
                 }
@@ -351,11 +371,13 @@ class MainActivity : ComponentActivity() {
 
     private fun startAdbModePrepare() {
         val config = _config.value
-        Log.i(TAG, "startAdbModePrepare: host=${config.adbHost}, port=${config.adbPort}")
+        val target = AdbConnectionService.getInstance().getConnectionTarget()
+            ?: (config.adbHost.takeIf { it.isNotBlank() }?.let { it to config.adbPort })
+        Log.i(TAG, "startAdbModePrepare: target=$target")
 
-        if (config.adbHost.isBlank() || config.adbPort == 0) {
+        if (target == null || target.second == 0) {
             Log.w(TAG, "ADB config missing")
-            Toast.makeText(this, "请先在设置中配置ADB连接信息", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "请先在设置中自动配对或配置ADB连接信息", Toast.LENGTH_SHORT).show()
             return
         }
 

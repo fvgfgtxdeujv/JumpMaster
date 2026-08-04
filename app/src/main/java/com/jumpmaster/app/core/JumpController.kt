@@ -55,7 +55,7 @@ class JumpController(private val context: Context) {
 
     private val imageAnalyzer = ImageAnalyzer(config)
     private val handler = Handler(Looper.getMainLooper())
-    private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+    private val vibrator = context.getSystemService(Vibrator::class.java)
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private var running = false
@@ -269,9 +269,16 @@ class JumpController(private val context: Context) {
         val adbService = AdbConnectionService.getInstance()
 
         if (!adbService.isConnected()) {
-            // Connect first
-            if (config.adbHost.isBlank() || config.adbPort == 0) {
-                listener?.onError("请先在设置中配置ADB连接信息")
+            // Use the mDNS-discovered target first (set by AdbPairingService),
+            // falling back to manually configured values.
+            val target = adbService.getConnectionTarget()
+                ?: (config.adbHost.takeIf { it.isNotBlank() }?.let { it to config.adbPort })
+            val (host, port) = target ?: run {
+                listener?.onError("请先在设置中配置或自动配对ADB连接")
+                return
+            }
+            if (port == 0) {
+                listener?.onError("请先在设置中配置或自动配对ADB连接")
                 return
             }
 
@@ -304,8 +311,8 @@ class JumpController(private val context: Context) {
             }
 
             adbService.connect(
-                host = config.adbHost,
-                port = config.adbPort,
+                host = host,
+                port = port,
                 pairingCode = config.adbPairingCode.takeIf { it.isNotBlank() },
                 pairingPort = config.adbPairingPort.takeIf { it > 0 }
             )
@@ -329,9 +336,11 @@ class JumpController(private val context: Context) {
 
         scope.launch {
             val adbService = AdbConnectionService.getInstance()
+            val target = adbService.getConnectionTarget()
+                ?: (config.adbHost.takeIf { it.isNotBlank() }?.let { it to config.adbPort })
             if (!adbService.ensureConnected(
-                    host = config.adbHost,
-                    port = config.adbPort,
+                    host = target?.first.orEmpty(),
+                    port = target?.second ?: 0,
                     pairingCode = config.adbPairingCode.takeIf { it.isNotBlank() },
                     pairingPort = config.adbPairingPort.takeIf { it > 0 }
                 )

@@ -1,4 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">跳一跳助手</string>
+
+    <!-- ADB 配对服务 -->
+    <string name="notification_channel_adb_pairing">ADB 无线调试配对</string>
+    <string name="notification_adb_pairing_searching_title">正在搜索无线调试设备</string>
+    <string name="notification_adb_pairing_searching_text">请在目标设备上开启「无线调试」…</string>
+    <string name="notification_adb_pairing_stop">停止搜索</string>
+    <string name="notification_adb_pairing_found_title">发现无线调试设备</string>
+    <string name="notification_adb_pairing_found_text">输入配对码完成配对</string>
+    <string name="notification_adb_pairing_input">输入配对码</string>
+    <string name="notification_adb_pairing_input_hint">6位数字配对码</string>
+    <string name="notification_adb_pairing_working_title">正在配对…</string>
+    <string name="notification_adb_pairing_working_text">请稍候</string>
+    <string name="notification_adb_pairing_succeed_title">配对成功</string>
+    <string name="notification_adb_pairing_succeed_text">正在等待连接端口…</string>
+    <string name="notification_adb_pairing_failed_title">配对失败</string>
+    <string name="notification_adb_pairing_failed_text">请检查配对码是否正确后重试</string>
+    <string name="notification_adb_pairing_retry">重试</string>
+    <string name="notification_adb_connected_title">ADB 连接成功</string>
+    <string name="notification_adb_connected_text">已连接无线调试，可以开始使用</string>
+    <string name="notification_adb_connect_failed_title">ADB 连接失败</string>
+    <string name="notification_adb_connect_failed_text">无法连接到设备，请检查无线调试状态</string>
 </resources>

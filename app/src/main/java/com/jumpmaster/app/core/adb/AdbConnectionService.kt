@@ -69,6 +69,15 @@ class AdbConnectionService {
         }
     }
 
+    /**
+     * The last known connection target (host + port), if any.
+     * Set when a successful mDNS discovery + pairing flow runs.
+     */
+    fun getConnectionTarget(): Pair<String, Int>? {
+        if (lastHost.isBlank() || lastPort == 0) return null
+        return lastHost to lastPort
+    }
+
     suspend fun ensureConnected(
         host: String = lastHost,
         port: Int = lastPort,
