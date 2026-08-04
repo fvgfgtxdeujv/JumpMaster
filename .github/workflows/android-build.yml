@@ -2,6 +2,15 @@ name: Android Build
 
 on:
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: 选择要编译的版本
+        type: choice
+        required: true
+        default: 正式版
+        options:
+          - 测试版
+          - 正式版
   push:
     branches:
       - master
@@ -37,13 +46,16 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build debug APK
-        run: ./gradlew --no-daemon :app:assembleDebug
-
-      - name: Build release APK
-        run: ./gradlew --no-daemon :app:assembleRelease
+      - name: Build APK
+        run: |
+          if [ "${{ inputs.build_type }}" = "测试版" ]; then
+            ./gradlew --no-daemon :app:assembleDebug
+          else
+            ./gradlew --no-daemon :app:assembleRelease
+          fi
 
       - name: Upload debug APK
+        if: ${{ inputs.build_type == '测试版' }}
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
@@ -51,6 +63,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload release APK
+        if: ${{ inputs.build_type != '测试版' }}
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
