@@ -1,7 +1,6 @@
 package com.jumpmaster.app.core.adb
 
 import android.annotation.SuppressLint
-import android.annotation.TargetApi
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
@@ -11,8 +10,6 @@ import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.ServerSocket
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
 /**
  * mDNS discovery for Android wireless debugging services.
@@ -29,7 +26,6 @@ class AdbMdns(
 
     private val nsdManager: NsdManager = context.getSystemService(NsdManager::class.java)
     private val listener = DiscoveryListener()
-    private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private var running = false
 
     /** Number of active discovery sessions (one per service type). */
@@ -37,9 +33,6 @@ class AdbMdns(
 
     /** Currently known endpoints, keyed by "name:serviceType". */
     private val discovered = mutableMapOf<String, MdnsEndpoint>()
-
-    /** ServiceInfoCallbacks registered on API 33+, keyed by "name:serviceType". */
-    private val registeredCallbacks = mutableMapOf<String, NsdManager.ServiceInfoCallback>()
 
     fun start() {
         if (running) return
@@ -63,60 +56,34 @@ class AdbMdns(
             }
             discoveryCount = 0
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registeredCallbacks.values.forEach {
-                try {
-                    nsdManager.unregisterServiceInfoCallback(it)
-                } catch (e: Exception) {
-                    Log.w(TAG, "unregister callback failed", e)
-                }
-            }
-            registeredCallbacks.clear()
-        }
         discovered.clear()
-        executor.shutdown()
     }
 
-    private fun onDiscoveryStarted() {
+    private fun handleDiscoveryStarted() {
         discoveryCount++
     }
 
-    private fun onDiscoveryStopped() {
+    private fun handleDiscoveryStopped() {
         discoveryCount = (discoveryCount - 1).coerceAtLeast(0)
     }
 
-    private fun onServiceFound(info: NsdServiceInfo) {
+    private fun handleServiceFound(info: NsdServiceInfo) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                val callback = ServiceInfoCallbackImpl()
-                nsdManager.registerServiceInfoCallback(info, executor, callback)
-                registeredCallbacks[info.serviceName + ":" + info.serviceType] = callback
-            } else {
-                @Suppress("DEPRECATION")
-                nsdManager.resolveService(info, ResolveListener())
-            }
+            @Suppress("DEPRECATION")
+            nsdManager.resolveService(info, ResolveListener())
         } catch (e: Exception) {
             Log.w(TAG, "resolve failed", e)
         }
     }
 
-    private fun onServiceLost(info: NsdServiceInfo) {
+    private fun handleServiceLost(info: NsdServiceInfo) {
         val key = info.serviceName + ":" + info.serviceType
         discovered.remove(key)?.let {
             onServiceLost(it)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registeredCallbacks.remove(key)?.let {
-                try {
-                    nsdManager.unregisterServiceInfoCallback(it)
-                } catch (e: Exception) {
-                    Log.w(TAG, "unregister callback failed", e)
-                }
-            }
-        }
     }
 
-    private fun onServiceResolved(resolved: NsdServiceInfo) {
+    private fun handleServiceResolved(resolved: NsdServiceInfo) {
         if (!running) return
 
         val isLocalHost = NetworkInterface.getNetworkInterfaces()
@@ -169,7 +136,7 @@ class AdbMdns(
     private inner class DiscoveryListener : NsdManager.DiscoveryListener {
         override fun onDiscoveryStarted(serviceType: String) {
             Log.v(TAG, "onDiscoveryStarted: $serviceType")
-            onDiscoveryStarted()
+            handleDiscoveryStarted()
         }
 
         override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
@@ -178,7 +145,7 @@ class AdbMdns(
 
         override fun onDiscoveryStopped(serviceType: String) {
             Log.v(TAG, "onDiscoveryStopped: $serviceType")
-            onDiscoveryStopped()
+            handleDiscoveryStopped()
         }
 
         override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
@@ -187,12 +154,12 @@ class AdbMdns(
 
         override fun onServiceFound(serviceInfo: NsdServiceInfo) {
             Log.v(TAG, "onServiceFound: ${serviceInfo.serviceName} type=${serviceInfo.serviceType}")
-            onServiceFound(serviceInfo)
+            handleServiceFound(serviceInfo)
         }
 
         override fun onServiceLost(serviceInfo: NsdServiceInfo) {
             Log.v(TAG, "onServiceLost: ${serviceInfo.serviceName}")
-            onServiceLost(serviceInfo)
+            handleServiceLost(serviceInfo)
         }
     }
 
@@ -203,27 +170,7 @@ class AdbMdns(
         }
 
         override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-            onServiceResolved(serviceInfo)
-        }
-    }
-
-    @TargetApi(Build.VERSION_CODES.TIRAMISU)
-    private inner class ServiceInfoCallbackImpl : NsdManager.ServiceInfoCallback {
-        override fun onServiceUpdated(serviceInfo: NsdServiceInfo) {
-            onServiceResolved(serviceInfo)
-        }
-
-        override fun onServiceLost() {
-            // Service info is dropped; DiscoveryListener#onServiceLost(serviceInfo)
-            // already handles removal from the known-endpoint map.
-        }
-
-        override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
-            Log.w(TAG, "onServiceInfoCallbackRegistrationFailed: error=$errorCode")
-        }
-
-        override fun onServiceInfoCallbackUnregistered() {
-            Log.v(TAG, "onServiceInfoCallbackUnregistered")
+            handleServiceResolved(serviceInfo)
         }
     }
 
