@@ -214,6 +214,7 @@ class MainActivity : ComponentActivity() {
                                     val intent = AdbPairingService.startIntent(this)
                                     startForegroundService(intent)
                                     Toast.makeText(this, "正在搜索无线调试设备…", Toast.LENGTH_SHORT).show()
+                                    openWirelessDebuggingSettings()
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Failed to start pairing service", e)
                                     Toast.makeText(this, "启动配对服务失败: ${e.message}", Toast.LENGTH_LONG).show()
@@ -368,6 +369,26 @@ class MainActivity : ComponentActivity() {
     }
 
     // ── ADB mode (wireless debugging) ──
+
+    /**
+     * Open the wireless debugging settings page (Android 11+), falling back to
+     * the developer options page, so the user can turn on wireless debugging
+     * while the pairing service keeps searching in the background.
+     */
+    private fun openWirelessDebuggingSettings() {
+        try {
+            startActivity(Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS"))
+            Log.i(TAG, "Opened wireless debugging settings")
+        } catch (e: Exception) {
+            Log.w(TAG, "Wireless debugging settings unavailable, falling back to developer options", e)
+            try {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                Log.i(TAG, "Opened developer options settings")
+            } catch (e2: Exception) {
+                Log.e(TAG, "Failed to open developer options settings", e2)
+            }
+        }
+    }
 
     private fun startAdbModePrepare() {
         val config = _config.value

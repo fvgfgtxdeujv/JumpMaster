@@ -30,7 +30,8 @@ import kotlinx.coroutines.launch
 @TargetApi(Build.VERSION_CODES.R)
 class AdbPairingService : Service() {
 
-    private var adbMdns: AdbMdns? = null
+    private var pairingMdns: AdbMdns? = null
+    private var connectMdns: AdbMdns? = null
 
     /** Pairing endpoint discovered via mDNS (waiting for code input). */
     private var pairingEndpoint: MdnsEndpoint? = null
@@ -39,25 +40,26 @@ class AdbPairingService : Service() {
     private var connectEndpoint: MdnsEndpoint? = null
 
     private val endpointObserver = { endpoint: MdnsEndpoint ->
-        Log.i(TAG, "Discovered endpoint: ${endpoint.serviceType} ${endpoint.host}:${endpoint.port}")
-        when {
-            endpoint.isPairing && pairingEndpoint == null -> {
-                pairingEndpoint = endpoint
-                val code = lastPairingCode
-                // If the user already replied before the pairing port was found,
-                // pair immediately without asking for the code again.
-                if (code != null) {
-                    pair(endpoint, code)
-                } else {
-                    notifyInputPairingCode(endpoint)
-                }
+        Log.i(TAG, "Discovered pairing endpoint: ${endpoint.serviceType} ${endpoint.host}:${endpoint.port}")
+        if (endpoint.isPairing && pairingEndpoint == null) {
+            pairingEndpoint = endpoint
+            val code = lastPairingCode
+            // If the user already replied before the pairing port was found,
+            // pair immediately without asking for the code again.
+            if (code != null) {
+                pair(endpoint, code)
+            } else {
+                notifyInputPairingCode(endpoint)
             }
-            !endpoint.isPairing -> {
-                connectEndpoint = endpoint
-                // If pairing already succeeded, connect immediately.
-                if (paired && connectEndpoint != null) {
-                    startConnect(connectEndpoint!!)
-                }
+        }
+    }
+
+    private val connectObserver = { endpoint: MdnsEndpoint ->
+        Log.i(TAG, "Discovered connect endpoint: ${endpoint.serviceType} ${endpoint.host}:${endpoint.port}")
+        if (!endpoint.isPairing) {
+            connectEndpoint = endpoint
+            if (paired) {
+                startConnect(endpoint)
             }
         }
     }
@@ -135,13 +137,24 @@ class AdbPairingService : Service() {
     }
 
     private fun startDiscovery() {
-        adbMdns?.stop()
-        adbMdns = AdbMdns(this, endpointObserver, endpointObserver).apply { start() }
+        // Only discover the pairing service while waiting for the code,
+        // mirroring Shizuku for the fastest possible discovery.
+        pairingMdns?.stop()
+        pairingMdns = AdbMdns(this, AdbMdns.TLS_PAIRING, endpointObserver, endpointObserver)
+            .apply { start() }
+    }
+
+    private fun startConnectDiscovery() {
+        connectMdns?.stop()
+        connectMdns = AdbMdns(this, AdbMdns.TLS_CONNECT, connectObserver, connectObserver)
+            .apply { start() }
     }
 
     private fun stopDiscovery() {
-        adbMdns?.stop()
-        adbMdns = null
+        pairingMdns?.stop()
+        pairingMdns = null
+        connectMdns?.stop()
+        connectMdns = null
     }
 
     private fun onInput(code: String): Notification {
@@ -170,11 +183,13 @@ class AdbPairingService : Service() {
                 if (success) {
                     paired = true
                     Log.i(TAG, "Paired successfully with $host:$port")
+                    pairingMdns?.stop()
                     val connect = connectEndpoint
                     if (connect != null) {
                         startConnect(connect)
                     } else {
                         notifyPairingSucceeded()
+                        startConnectDiscovery()
                     }
                 } else {
                     notifyPairingFailed()

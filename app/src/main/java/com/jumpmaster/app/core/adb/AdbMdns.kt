@@ -20,6 +20,7 @@ import java.net.ServerSocket
  */
 class AdbMdns(
     context: Context,
+    private val serviceType: String,
     private val onServiceFound: (MdnsEndpoint) -> Unit,
     private val onServiceLost: (MdnsEndpoint) -> Unit
 ) {
@@ -28,9 +29,6 @@ class AdbMdns(
     private val listener = DiscoveryListener()
     private var running = false
 
-    /** Number of active discovery sessions (one per service type). */
-    private var discoveryCount = 0
-
     /** Currently known endpoints, keyed by "name:serviceType". */
     private val discovered = mutableMapOf<String, MdnsEndpoint>()
 
@@ -38,8 +36,7 @@ class AdbMdns(
         if (running) return
         running = true
         try {
-            nsdManager.discoverServices(AdbMdns.TLS_CONNECT, NsdManager.PROTOCOL_DNS_SD, listener)
-            nsdManager.discoverServices(AdbMdns.TLS_PAIRING, NsdManager.PROTOCOL_DNS_SD, listener)
+            nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener)
         } catch (e: Exception) {
             Log.e(TAG, "start discovery failed", e)
         }
@@ -48,23 +45,20 @@ class AdbMdns(
     fun stop() {
         if (!running) return
         running = false
-        if (discoveryCount > 0) {
-            try {
-                nsdManager.stopServiceDiscovery(listener)
-            } catch (e: Exception) {
-                Log.w(TAG, "stop discovery failed", e)
-            }
-            discoveryCount = 0
+        try {
+            nsdManager.stopServiceDiscovery(listener)
+        } catch (e: Exception) {
+            Log.w(TAG, "stop discovery failed", e)
         }
         discovered.clear()
     }
 
     private fun handleDiscoveryStarted() {
-        discoveryCount++
+        Log.v(TAG, "discovery started for $serviceType")
     }
 
     private fun handleDiscoveryStopped() {
-        discoveryCount = (discoveryCount - 1).coerceAtLeast(0)
+        Log.v(TAG, "discovery stopped for $serviceType")
     }
 
     private fun handleServiceFound(info: NsdServiceInfo) {
